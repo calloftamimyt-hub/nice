@@ -39,8 +39,11 @@ const REAL_SUPABASE_KEY = process.env.SUPABASE_KEY;
 
 app.use(['/auth/v1', '/rest/v1'], async (req, res) => {
     try {
-        if (!REAL_SUPABASE_URL || !REAL_SUPABASE_KEY) {
-            return res.status(500).json({ error: 'Supabase URL or Key not set on the server.' });
+        if (!REAL_SUPABASE_URL || !REAL_SUPABASE_KEY || REAL_SUPABASE_KEY === "proxy-will-append-real-key" || REAL_SUPABASE_URL === "https://recharge-api-backend.onrender.com") {
+            return res.status(500).json({ 
+                error: 'server_error', 
+                error_description: 'Backend Configuration Error: You must set REAL Supabase URL and SUPABASE_KEY in your Render.com Environment Variables!'
+            });
         }
 
         // Fix double trailing slashes just in case, originalUrl contains /auth/v1/...
