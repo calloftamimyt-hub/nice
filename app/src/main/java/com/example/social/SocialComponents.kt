@@ -116,14 +116,15 @@ fun WhatsOnYourMindSection(onNavigateToCreatePost: () -> Unit = {}) {
 
 @Composable
 fun VideoFeedSection() {
-    var videos by remember { mutableStateOf<List<VideoItem>>(emptyList()) }
+    val globalVideos by com.example.social.GlobalVideoState.videos.collectAsState()
+    var fetchedVideos by remember { mutableStateOf<List<VideoItem>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
         try {
             val response: io.ktor.client.statement.HttpResponse = com.example.network.ApiClient.ktor.get("${com.example.network.ApiConfig.BASE_URL}api/videos")
             val data = response.body<VideoResponse>()
-            videos = data.videos
+            fetchedVideos = data.videos
         } catch (e: Exception) {
             e.printStackTrace()
         } finally {
@@ -131,15 +132,17 @@ fun VideoFeedSection() {
         }
     }
 
+    val videos = globalVideos + fetchedVideos
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 20.dp, vertical = 8.dp)
     ) {
-        Text("Recent Posts", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextDark)
+        Text("Shorts Feed & Recent Posts", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextDark)
         Spacer(modifier = Modifier.height(12.dp))
         
-        if (isLoading) {
+        if (isLoading && videos.isEmpty()) {
             CircularProgressIndicator(color = PrimaryGreen, modifier = Modifier.align(Alignment.CenterHorizontally))
         } else if (videos.isEmpty()) {
             Text("No posts available right now.", color = TextGray, fontSize = 14.sp)
@@ -240,6 +243,10 @@ fun CreatePostScreen(
     var descriptionInput by remember { mutableStateOf("") }
     var selectedMediaUri by remember { mutableStateOf<Uri?>(null) }
     var isUploading by remember { mutableStateOf(false) }
+    var processing by remember { mutableStateOf(false) }
+    var uploadProgress by remember { mutableStateOf(0f) }
+    
+    val coroutineScope = rememberCoroutineScope()
 
     val mediaPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -275,11 +282,19 @@ fun CreatePostScreen(
                         .fillMaxWidth()
                         .height(200.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color.Black.copy(alpha=0.1f)),
+                        .background(Color.Black),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Image, contentDescription = "Media Attached", modifier = Modifier.size(64.dp), tint = PrimaryGreen)
-                    // In a real app we'd show an AsyncImage or Video Player preview here
+                    androidx.compose.ui.viewinterop.AndroidView(
+                        factory = { context ->
+                            android.widget.VideoView(context).apply {
+                                setVideoURI(selectedMediaUri)
+                                start()
+                                setOnCompletionListener { start() }
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
                 Spacer(modifier = Modifier.height(16.dp))
             } else {
@@ -335,21 +350,44 @@ fun CreatePostScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            Button(
-                onClick = { 
-                    if (titleInput.isNotBlank()) {
-                         isUploading = true
-                         // Need a real upload mechanism, but mock returning for UI
-                         onNavigateBack()
-                    }
-                },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen),
-                enabled = !isUploading && titleInput.isNotBlank()
-            ) {
-                if (isUploading) {
-                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+            if (isUploading) {
+                LinearProgressIndicator(progress = uploadProgress, modifier = Modifier.fillMaxWidth().height(8.dp), color = PrimaryGreen)
+                Spacer(modifier = Modifier.height(12.dp))
+                if (processing) {
+                    Text("Processing... After processing, your video will be available.", color = PrimaryGreen, fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth())
                 } else {
+                    Text("Uploading to server... ${(uploadProgress * 100).toInt()}%", color = TextGray, fontSize = 14.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center, modifier = Modifier.fillMaxWidth())
+                }
+                Spacer(modifier = Modifier.height(32.dp))
+            } else {
+                Button(
+                    onClick = { 
+                        if (titleInput.isNotBlank() && selectedMediaUri != null) {
+                             isUploading = true
+                             coroutineScope.launch {
+                                 // Simulate upload progress
+                                 for (i in 1..100) {
+                                     uploadProgress = i / 100f
+                                     kotlinx.coroutines.delay(20)
+                                 }
+                                 processing = true
+                                 // Simulate processing time
+                                 kotlinx.coroutines.delay(1500)
+                                 com.example.social.GlobalVideoState.addVideo(
+                                    VideoItem(
+                                        filename = titleInput,
+                                        url = selectedMediaUri.toString()
+                                    )
+                                 )
+                                 // "Data will be sent to the server"
+                                 onNavigateBack()
+                             }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen),
+                    enabled = !isUploading && titleInput.isNotBlank() && selectedMediaUri != null
+                ) {
                     Text("Publish Post", fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 }
             }
