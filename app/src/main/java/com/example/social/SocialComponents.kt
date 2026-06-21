@@ -14,10 +14,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.ChatBubbleOutline
+import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -157,36 +163,47 @@ fun VideoFeedSection() {
 
 @Composable
 fun VideoPostCard(video: VideoItem) {
+    var isLiked by remember { mutableStateOf(false) }
+    var isSubscribed by remember { mutableStateOf(false) }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(Color.White)
             .border(1.dp, Color.LightGray.copy(alpha=0.5f), RoundedCornerShape(12.dp))
-            .padding(16.dp)
+            .padding(bottom = 16.dp)
     ) {
-        // Mock user details
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // User Header
+        Row(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(40.dp)
                     .clip(CircleShape)
                     .background(PrimaryGreen.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("U", color = PrimaryGreen, fontWeight = FontWeight.Bold)
+                Text("U", color = PrimaryGreen, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             }
             Spacer(modifier = Modifier.width(12.dp))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text("User", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextDark)
                 Text("Just now", fontSize = 12.sp, color = TextGray)
             }
+            TextButton(
+                onClick = { isSubscribed = !isSubscribed },
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                modifier = Modifier.height(32.dp),
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = if (isSubscribed) TextGray else PrimaryGreen
+                )
+            ) {
+                Text(if (isSubscribed) "Subscribed" else "Subscribe", fontWeight = FontWeight.Bold)
+            }
         }
-        
-        Spacer(modifier = Modifier.height(12.dp))
-        Text("Uploaded video file: ${video.filename}", color = TextDark, fontSize = 14.sp)
-        
-        Spacer(modifier = Modifier.height(12.dp))
         
         val isImage = video.filename.endsWith(".jpg", ignoreCase = true) || 
                       video.filename.endsWith(".jpeg", ignoreCase = true) ||
@@ -196,41 +213,95 @@ fun VideoPostCard(video: VideoItem) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color.White)
-                    .border(1.dp, Color.LightGray.copy(alpha=0.3f), RoundedCornerShape(8.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(Icons.Default.Image, contentDescription = "Image Post", tint = PrimaryGreen, modifier = Modifier.size(48.dp))
-            }
-        } else {
-            // Video Placeholder
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .height(350.dp)
                     .background(Color.Black),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.VideoLibrary, contentDescription = "Play Video", tint = Color.White, modifier = Modifier.size(48.dp))
+                Icon(Icons.Default.Image, contentDescription = "Image Post", tint = Color.White.copy(alpha=0.5f), modifier = Modifier.size(64.dp))
+            }
+        } else {
+            // Video Player Placeholder
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(400.dp)
+                    .background(Color.Black),
+                contentAlignment = Alignment.Center
+            ) {
+                if (video.url.isNotEmpty()) {
+                    androidx.compose.ui.viewinterop.AndroidView(
+                        factory = { context ->
+                            android.widget.VideoView(context).apply {
+                                setVideoURI(Uri.parse(video.url))
+                                setOnPreparedListener { mp ->
+                                    mp.isLooping = true
+                                    start()
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Icon(Icons.Default.VideoLibrary, contentDescription = "Play Video", tint = Color.White.copy(alpha=0.5f), modifier = Modifier.size(64.dp))
+                }
             }
         }
         
         Spacer(modifier = Modifier.height(12.dp))
-        Divider(color = Color.LightGray.copy(alpha = 0.5f))
-        Spacer(modifier = Modifier.height(8.dp))
         
+        // Post Title/Caption
+        Text(
+            text = video.filename, 
+            color = TextDark, 
+            fontSize = 14.sp,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        // Actions
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Like", color = TextGray, fontSize = 14.sp)
-            Text("Comment", color = TextGray, fontSize = 14.sp)
-            Text("Share", color = TextGray, fontSize = 14.sp)
-            Text("Report", color = Color.Red, fontSize = 14.sp)
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { isLiked = !isLiked }) {
+                Icon(
+                    if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder, 
+                    contentDescription = "Like", 
+                    tint = if (isLiked) Color.Red else TextDark,
+                    modifier = Modifier.size(28.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(if (isLiked) "1" else "0", fontWeight = FontWeight.Bold, color = TextDark)
+            }
+            
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.ChatBubbleOutline, 
+                    contentDescription = "Comment", 
+                    tint = TextDark,
+                    modifier = Modifier.size(26.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("0", fontWeight = FontWeight.Bold, color = TextDark)
+            }
+            
+            Icon(
+                Icons.Default.Send, 
+                contentDescription = "Share", 
+                tint = TextDark,
+                modifier = Modifier.size(26.dp)
+            )
+            
+            Spacer(modifier = Modifier.weight(1f))
+            
+            Icon(
+                Icons.Default.BookmarkBorder, 
+                contentDescription = "Save", 
+                tint = TextDark,
+                modifier = Modifier.size(28.dp)
+            )
         }
     }
 }
@@ -360,27 +431,76 @@ fun CreatePostScreen(
                 }
                 Spacer(modifier = Modifier.height(32.dp))
             } else {
+                val context = androidx.compose.ui.platform.LocalContext.current
                 Button(
                     onClick = { 
                         if (titleInput.isNotBlank() && selectedMediaUri != null) {
                              isUploading = true
-                             coroutineScope.launch {
-                                 // Simulate upload progress
-                                 for (i in 1..100) {
-                                     uploadProgress = i / 100f
-                                     kotlinx.coroutines.delay(20)
+                             coroutineScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                                 try {
+                                     val client = okhttp3.OkHttpClient.Builder()
+                                         .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                                         .writeTimeout(300, java.util.concurrent.TimeUnit.SECONDS)
+                                         .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                                         .build()
+                                     
+                                     val inputStream = context.contentResolver.openInputStream(selectedMediaUri!!)
+                                     val totalSize = inputStream?.available()?.toLong() ?: 0L
+                                     
+                                     val mimeTypeStr = context.contentResolver.getType(selectedMediaUri!!) ?: "video/mp4"
+                                     val ext = if (mimeTypeStr.startsWith("image")) "jpg" else "mp4"
+                                     
+                                     val mediaBody = object : okhttp3.RequestBody() {
+                                         override fun contentType(): okhttp3.MediaType? = mimeTypeStr.toMediaTypeOrNull()
+                                         override fun contentLength(): Long = totalSize
+                                         override fun writeTo(sink: okio.BufferedSink) {
+                                             inputStream?.use { input ->
+                                                 val buffer = ByteArray(8192)
+                                                 var read: Int
+                                                 var uploaded = 0L
+                                                 while (input.read(buffer).also { read = it } != -1) {
+                                                     sink.write(buffer, 0, read)
+                                                     uploaded += read
+                                                     uploadProgress = (uploaded.toFloat() / totalSize.coerceAtLeast(1).toFloat())
+                                                 }
+                                             }
+                                         }
+                                     }
+                                     
+                                     processing = true
+                                     
+                                     val bodyBuilder = okhttp3.MultipartBody.Builder().setType(okhttp3.MultipartBody.FORM)
+                                         .addFormDataPart("media", "upload.$ext", mediaBody)
+                                         
+                                     val request = okhttp3.Request.Builder()
+                                         .url(com.example.network.ApiConfig.BASE_URL + "api/upload")
+                                         .post(bodyBuilder.build())
+                                         .build()
+                                         
+                                     val response = client.newCall(request).execute()
+                                     if (response.isSuccessful) {
+                                         val responseString = response.body?.string()
+                                         val json = org.json.JSONObject(responseString ?: "{}")
+                                         val urlStr = json.optJSONObject("media")?.optString("url", "") ?: ""
+                                         
+                                         com.example.social.GlobalVideoState.addVideo(
+                                             VideoItem(
+                                                 filename = titleInput,
+                                                 url = if (urlStr.isNotEmpty()) {
+                                                     if (urlStr.startsWith("http")) urlStr else "https://$urlStr"
+                                                 } else {
+                                                    selectedMediaUri.toString()
+                                                 }
+                                             )
+                                         )
+                                     } 
+                                 } catch(e: Exception) {
+                                     e.printStackTrace()
+                                 } finally {
+                                     kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                         onNavigateBack()
+                                     }
                                  }
-                                 processing = true
-                                 // Simulate processing time
-                                 kotlinx.coroutines.delay(1500)
-                                 com.example.social.GlobalVideoState.addVideo(
-                                    VideoItem(
-                                        filename = titleInput,
-                                        url = selectedMediaUri.toString()
-                                    )
-                                 )
-                                 // "Data will be sent to the server"
-                                 onNavigateBack()
                              }
                         }
                     },
