@@ -33,6 +33,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.jan.supabase.postgrest.postgrest
+import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.user.UserInfo
 import com.example.Supabase
 import com.example.ui.theme.PrimaryGreen
 import com.example.ui.theme.TextDark
@@ -122,23 +125,26 @@ fun WhatsOnYourMindSection(onNavigateToCreatePost: () -> Unit = {}) {
 
 @Composable
 fun VideoFeedSection() {
-    val globalVideos by com.example.social.GlobalVideoState.videos.collectAsState()
-    var fetchedVideos by remember { mutableStateOf<List<VideoItem>>(emptyList()) }
+    val globalPosts by com.example.social.GlobalPostState.posts.collectAsState()
+    var fetchedPosts by remember { mutableStateOf<List<Post>>(emptyList()) }
     var isLoading by remember { mutableStateOf(true) }
 
     LaunchedEffect(Unit) {
         try {
-            val response: io.ktor.client.statement.HttpResponse = com.example.network.ApiClient.ktor.get("${com.example.network.ApiConfig.BASE_URL}api/videos")
-            val data = response.body<VideoResponse>()
-            fetchedVideos = data.videos
+            // First fetch from Supabase
+            val posts = com.example.Supabase.client.postgrest["posts"]
+                .select().decodeList<Post>()
+            fetchedPosts = posts.sortedByDescending { it.createdAt }
+            com.example.social.GlobalPostState.setPosts(fetchedPosts)
         } catch (e: Exception) {
             e.printStackTrace()
+            // Fallback to fetch from existing backend if available, though Supabase is preferred
         } finally {
             isLoading = false
         }
     }
 
-    val videos = globalVideos + fetchedVideos
+    val displayPosts = globalPosts.ifEmpty { fetchedPosts }
 
     Column(
         modifier = Modifier
@@ -148,13 +154,13 @@ fun VideoFeedSection() {
         Text("Shorts Feed & Recent Posts", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = TextDark)
         Spacer(modifier = Modifier.height(12.dp))
         
-        if (isLoading && videos.isEmpty()) {
+        if (isLoading && displayPosts.isEmpty()) {
             CircularProgressIndicator(color = PrimaryGreen, modifier = Modifier.align(Alignment.CenterHorizontally))
-        } else if (videos.isEmpty()) {
+        } else if (displayPosts.isEmpty()) {
             Text("No posts available right now.", color = TextGray, fontSize = 14.sp)
         } else {
-            videos.forEach { video ->
-                VideoPostCard(video)
+            displayPosts.forEach { post ->
+                VideoPostCard(post)
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
@@ -162,9 +168,10 @@ fun VideoFeedSection() {
 }
 
 @Composable
-fun VideoPostCard(video: VideoItem) {
-    var isLiked by remember { mutableStateOf(false) }
+fun VideoPostCard(post: Post) {
+    var isLiked by remember { mutableStateOf(post.isLikedByMe) }
     var isSubscribed by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
@@ -186,11 +193,11 @@ fun VideoPostCard(video: VideoItem) {
                     .background(PrimaryGreen.copy(alpha = 0.2f)),
                 contentAlignment = Alignment.Center
             ) {
-                Text("U", color = PrimaryGreen, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(post.userName.firstOrNull()?.toString()?.uppercase() ?: "U", color = PrimaryGreen, fontWeight = FontWeight.Bold, fontSize = 18.sp)
             }
             Spacer(modifier = Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text("User", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextDark)
+                Text(post.userName, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = TextDark)
                 Text("Just now", fontSize = 12.sp, color = TextGray)
             }
             TextButton(
@@ -205,9 +212,9 @@ fun VideoPostCard(video: VideoItem) {
             }
         }
         
-        val isImage = video.filename.endsWith(".jpg", ignoreCase = true) || 
-                      video.filename.endsWith(".jpeg", ignoreCase = true) ||
-                      video.filename.endsWith(".png", ignoreCase = true)
+        val isImage = post.mediaType == "photo" || post.mediaUrl.endsWith(".jpg", ignoreCase = true) || 
+                      post.mediaUrl.endsWith(".jpeg", ignoreCase = true) ||
+                      post.mediaUrl.endsWith(".png", ignoreCase = true)
                       
         if (isImage) {
             Box(
@@ -217,7 +224,12 @@ fun VideoPostCard(video: VideoItem) {
                     .background(Color.Black),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Image, contentDescription = "Image Post", tint = Color.White.copy(alpha=0.5f), modifier = Modifier.size(64.dp))
+                coil.compose.AsyncImage(
+                    model = post.mediaUrl,
+                    contentDescription = "Post Image",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
             }
         } else {
             // Video Player Placeholder
@@ -228,11 +240,11 @@ fun VideoPostCard(video: VideoItem) {
                     .background(Color.Black),
                 contentAlignment = Alignment.Center
             ) {
-                if (video.url.isNotEmpty()) {
+                if (post.mediaUrl.isNotEmpty()) {
                     androidx.compose.ui.viewinterop.AndroidView(
                         factory = { context ->
                             android.widget.VideoView(context).apply {
-                                setVideoURI(Uri.parse(video.url))
+                                setVideoURI(Uri.parse(post.mediaUrl))
                                 setOnPreparedListener { mp ->
                                     mp.isLooping = true
                                     start()
@@ -251,11 +263,19 @@ fun VideoPostCard(video: VideoItem) {
         
         // Post Title/Caption
         Text(
-            text = video.filename, 
+            text = post.title, 
             color = TextDark, 
             fontSize = 14.sp,
             modifier = Modifier.padding(horizontal = 16.dp)
         )
+        if (!post.description.isNullOrBlank()) {
+             Text(
+                text = post.description, 
+                color = TextGray, 
+                fontSize = 12.sp,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+             )
+        }
         
         Spacer(modifier = Modifier.height(12.dp))
         
@@ -265,7 +285,10 @@ fun VideoPostCard(video: VideoItem) {
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { isLiked = !isLiked }) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { 
+                isLiked = !isLiked 
+                // In full implementation, save to 'likes' table
+            }) {
                 Icon(
                     if (isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder, 
                     contentDescription = "Like", 
@@ -483,16 +506,31 @@ fun CreatePostScreen(
                                          val json = org.json.JSONObject(responseString ?: "{}")
                                          val urlStr = json.optJSONObject("media")?.optString("url", "") ?: ""
                                          
-                                         com.example.social.GlobalVideoState.addVideo(
-                                             VideoItem(
-                                                 filename = titleInput,
-                                                 url = if (urlStr.isNotEmpty()) {
-                                                     if (urlStr.startsWith("http")) urlStr else "https://$urlStr"
-                                                 } else {
-                                                    selectedMediaUri.toString()
-                                                 }
-                                             )
+                                         val finalUrl = if (urlStr.isNotEmpty()) {
+                                             if (urlStr.startsWith("http")) urlStr else "https://$urlStr"
+                                         } else {
+                                             selectedMediaUri.toString()
+                                         }
+                                         
+                                         val user = com.example.Supabase.client.auth.currentUserOrNull()
+                                         val currentUserId = user?.id ?: "anonymous_user"
+                                         
+                                         val newPost = Post(
+                                             userId = currentUserId,
+                                             mediaType = if (ext == "mp4") "video" else "photo",
+                                             mediaUrl = finalUrl,
+                                             title = titleInput,
+                                             description = descriptionInput,
+                                             userName = user?.userMetadata?.get("full_name")?.toString()?.replace("\"", "") ?: "User"
                                          )
+                                         
+                                         try {
+                                             com.example.Supabase.client.postgrest["posts"].insert(newPost)
+                                         } catch(e: Exception) {
+                                             e.printStackTrace()
+                                         }
+                                         
+                                         com.example.social.GlobalPostState.addPost(newPost)
                                      } 
                                  } catch(e: Exception) {
                                      e.printStackTrace()
