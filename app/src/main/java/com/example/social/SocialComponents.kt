@@ -12,6 +12,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.*
@@ -33,7 +37,7 @@ import io.ktor.client.request.get
 import kotlinx.coroutines.launch
 
 @Composable
-fun WhatsOnYourMindSection() {
+fun WhatsOnYourMindSection(onNavigateToCreatePost: () -> Unit = {}) {
     var isUserLoggedIn by remember { mutableStateOf(false) }
     var currentUserName by remember { mutableStateOf("User") }
     var currentUserAvatar by remember { mutableStateOf<String?>(null) }
@@ -53,17 +57,6 @@ fun WhatsOnYourMindSection() {
         return
     }
 
-    var textInput by remember { mutableStateOf("") }
-    var selectedMediaUri by remember { mutableStateOf<Uri?>(null) }
-
-    val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? -> selectedMediaUri = uri }
-
-    val videoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? -> selectedMediaUri = uri }
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -71,6 +64,7 @@ fun WhatsOnYourMindSection() {
             .clip(RoundedCornerShape(12.dp))
             .background(Color.White)
             .border(1.dp, Color.LightGray.copy(alpha=0.5f), RoundedCornerShape(12.dp))
+            .clickable { onNavigateToCreatePost() }
             .padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -87,54 +81,32 @@ fun WhatsOnYourMindSection() {
             
             Spacer(modifier = Modifier.width(12.dp))
             
-            TextField(
-                value = textInput,
-                onValueChange = { textInput = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("What's on your mind?", color = TextGray) },
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                )
+            Text(
+                "What's on your mind?", 
+                color = TextGray, 
+                fontSize = 16.sp,
+                modifier = Modifier.weight(1f)
             )
-        }
-        
-        if (selectedMediaUri != null) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text("Media attached: *1 media*", color = PrimaryGreen, fontSize = 12.sp, modifier = Modifier.padding(start=52.dp))
         }
 
         Spacer(modifier = Modifier.height(12.dp))
-        Divider(color = Color.LightGray.copy(alpha=0.5f))
+        HorizontalDivider(color = Color.LightGray.copy(alpha=0.5f))
         Spacer(modifier = Modifier.height(12.dp))
 
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { photoPickerLauncher.launch("image/*") }) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Image, contentDescription = "Photo", tint = Color(0xFF4CAF50))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("Photo", color = TextDark, fontSize = 14.sp)
             }
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { videoPickerLauncher.launch("video/*") }) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.VideoLibrary, contentDescription = "Video", tint = Color(0xFFF44336))
                 Spacer(modifier = Modifier.width(6.dp))
                 Text("Video", color = TextDark, fontSize = 14.sp)
             }
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Button(
-            onClick = { /* Handle Upload logic later */ },
-            modifier = Modifier.fillMaxWidth().height(48.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen)
-        ) {
-            Text("Post")
         }
     }
     
@@ -212,16 +184,35 @@ fun VideoPostCard(video: VideoItem) {
         Text("Uploaded video file: ${video.filename}", color = TextDark, fontSize = 14.sp)
         
         Spacer(modifier = Modifier.height(12.dp))
-        // Video Placeholder
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(200.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color.Black),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(Icons.Filled.VideoLibrary, contentDescription = "Play Video", tint = Color.White, modifier = Modifier.size(48.dp))
+        
+        val isImage = video.filename.endsWith(".jpg", ignoreCase = true) || 
+                      video.filename.endsWith(".jpeg", ignoreCase = true) ||
+                      video.filename.endsWith(".png", ignoreCase = true)
+                      
+        if (isImage) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.White)
+                    .border(1.dp, Color.LightGray.copy(alpha=0.3f), RoundedCornerShape(8.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Image, contentDescription = "Image Post", tint = PrimaryGreen, modifier = Modifier.size(48.dp))
+            }
+        } else {
+            // Video Placeholder
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(200.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color.Black),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.VideoLibrary, contentDescription = "Play Video", tint = Color.White, modifier = Modifier.size(48.dp))
+            }
         }
         
         Spacer(modifier = Modifier.height(12.dp))
@@ -237,6 +228,131 @@ fun VideoPostCard(video: VideoItem) {
             Text("Comment", color = TextGray, fontSize = 14.sp)
             Text("Share", color = TextGray, fontSize = 14.sp)
             Text("Report", color = Color.Red, fontSize = 14.sp)
+        }
+    }
+}
+
+@Composable
+fun CreatePostScreen(
+    onNavigateBack: () -> Unit
+) {
+    var titleInput by remember { mutableStateOf("") }
+    var descriptionInput by remember { mutableStateOf("") }
+    var selectedMediaUri by remember { mutableStateOf<Uri?>(null) }
+    var isUploading by remember { mutableStateOf(false) }
+
+    val mediaPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? -> selectedMediaUri = uri }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFF9FAFB))
+    ) {
+        // App Bar
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.White)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onNavigateBack) {
+                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextDark)
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Create Post", fontWeight = FontWeight.Bold, fontSize = 20.sp, color = TextDark)
+        }
+
+        Divider(color = Color.LightGray.copy(alpha=0.5f))
+
+        Column(modifier = Modifier.padding(20.dp).verticalScroll(rememberScrollState())) {
+            // Media Preview
+            if (selectedMediaUri != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color.Black.copy(alpha=0.1f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Image, contentDescription = "Media Attached", modifier = Modifier.size(64.dp), tint = PrimaryGreen)
+                    // In a real app we'd show an AsyncImage or Video Player preview here
+                }
+                Spacer(modifier = Modifier.height(16.dp))
+            } else {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(PrimaryGreen.copy(alpha = 0.05f))
+                        .border(1.dp, PrimaryGreen.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                        .clickable { mediaPickerLauncher.launch("*/*") },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Add, contentDescription = "Add Media", tint = PrimaryGreen, modifier = Modifier.size(32.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("Add Photo or Video", color = PrimaryGreen, fontWeight = FontWeight.Medium)
+                    }
+                }
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            // Title Field
+            Text("Title", fontWeight = FontWeight.Bold, color = TextDark, fontSize = 16.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = titleInput,
+                onValueChange = { titleInput = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("Enter post title...") },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = PrimaryGreen,
+                    unfocusedBorderColor = Color.LightGray
+                )
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Description Field
+            Text("Description (Optional)", fontWeight = FontWeight.Bold, color = TextDark, fontSize = 16.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = descriptionInput,
+                onValueChange = { descriptionInput = it },
+                modifier = Modifier.fillMaxWidth().height(120.dp),
+                placeholder = { Text("Say something about this...") },
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = PrimaryGreen,
+                    unfocusedBorderColor = Color.LightGray
+                )
+            )
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Button(
+                onClick = { 
+                    if (titleInput.isNotBlank()) {
+                         isUploading = true
+                         // Need a real upload mechanism, but mock returning for UI
+                         onNavigateBack()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryGreen),
+                enabled = !isUploading && titleInput.isNotBlank()
+            ) {
+                if (isUploading) {
+                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp))
+                } else {
+                    Text("Publish Post", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
         }
     }
 }

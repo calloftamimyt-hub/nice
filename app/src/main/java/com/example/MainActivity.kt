@@ -356,6 +356,7 @@ class MainActivity : ComponentActivity() {
                         var isParentalPageOpen by remember { mutableStateOf(false) }
                         var isPrayerPageOpen by remember { mutableStateOf(false) }
                         var isCreateCircleAlertOpen by remember { mutableStateOf(false) }
+                        var isCreatePostOpen by remember { mutableStateOf(false) }
                         
                         val alarmViewModel: com.example.viewmodel.AlarmViewModel = remember { 
                             com.example.viewmodel.AlarmViewModel(context) 
@@ -383,7 +384,7 @@ class MainActivity : ComponentActivity() {
                         }
 
                         val view = LocalView.current
-                        val isProfileOverlayOpen = isAlarmPageOpen || isZakatPageOpen || isCalendarPageOpen || isQiblaPageOpen || isNotificationsPageOpen || isAddAlarmPageOpen || isParentalPageOpen || isPrayerPageOpen || isCreateCircleAlertOpen
+                        val isProfileOverlayOpen = isAlarmPageOpen || isZakatPageOpen || isCalendarPageOpen || isQiblaPageOpen || isNotificationsPageOpen || isAddAlarmPageOpen || isParentalPageOpen || isPrayerPageOpen || isCreateCircleAlertOpen || isCreatePostOpen
                         val isDarkStatusBar = false
                         val isAuthPage = false
                         
@@ -420,6 +421,7 @@ class MainActivity : ComponentActivity() {
                                         isParentalPageOpen = false
                                         isPrayerPageOpen = false
                                         isCreateCircleAlertOpen = false
+                                        isCreatePostOpen = false
                                     }
                                 } 
                             }
@@ -456,7 +458,8 @@ class MainActivity : ComponentActivity() {
                                             onNavigateToTools = { selectedTab = "tools" },
                                             onNavigateToAllahNames = { selectedTab = "allah_names" },
                                             onNavigateToRamadan = { selectedTab = "ramadan" },
-                                            onOpenNotificationsPage = { isNotificationsPageOpen = true }
+                                            onOpenNotificationsPage = { isNotificationsPageOpen = true },
+                                            onNavigateToCreatePost = { isCreatePostOpen = true }
                                         )
                                     } else if (selectedTab == "location") {
                                         LocationSelectionScreen(
@@ -574,6 +577,15 @@ class MainActivity : ComponentActivity() {
                                             isCreateCircleAlertOpen = false
                                             // Optional: submit to server
                                         }
+                                    )
+                                }
+                                AnimatedVisibility(
+                                    visible = isCreatePostOpen,
+                                    enter = androidx.compose.animation.slideInVertically(initialOffsetY = { it }, animationSpec = androidx.compose.animation.core.tween(400)) + androidx.compose.animation.fadeIn(androidx.compose.animation.core.tween(400)),
+                                    exit = androidx.compose.animation.slideOutVertically(targetOffsetY = { it }, animationSpec = androidx.compose.animation.core.tween(400)) + androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(400))
+                                ) {
+                                    com.example.social.CreatePostScreen(
+                                        onNavigateBack = { isCreatePostOpen = false }
                                     )
                                 }
                             }
@@ -771,7 +783,8 @@ fun HomeScreen(
     onNavigateToTools: () -> Unit,
     onNavigateToAllahNames: () -> Unit,
     onNavigateToRamadan: () -> Unit,
-    onOpenNotificationsPage: () -> Unit
+    onOpenNotificationsPage: () -> Unit,
+    onNavigateToCreatePost: () -> Unit = {}
 ) {
     var isPrayerExpanded by remember { mutableStateOf(false) }
     
@@ -932,7 +945,7 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        var isCategoryExpanded by remember { mutableStateOf(false) }
+        var isPrayerInfoExpanded by remember { mutableStateOf(false) }
 
         // Categories Section Header
         Row(
@@ -943,64 +956,81 @@ fun HomeScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(LocalAppStrings.current.categories, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextDark)
-            Text(
-                if (GlobalLanguage.isEnglish) if (isCategoryExpanded) "See Less >" else "See All >" 
-                else if (isCategoryExpanded) "কম দেখুন >" else "সবগুলো >", 
-                color = PrimaryGreen, 
-                fontSize = 12.sp, 
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.clickable { isCategoryExpanded = !isCategoryExpanded }
-            )
         }
         
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Categories Grid
-        CategoryGrid(
+        // Categories Scrollable Row
+        CategoryScrollableRow(
             onNavigateToTracker, 
             onNavigateToQuran,
             onNavigateToZakat,
             onNavigateToCalendar,
             onNavigateToQibla,
             onNavigateToAllahNames = onNavigateToAllahNames,
-            onNavigateToRamadan = onNavigateToRamadan,
-            maxItems = if (isCategoryExpanded) null else 8
+            onNavigateToRamadan = onNavigateToRamadan
         )
         
-        // "What's Your Mind" Section will be shown here when not expanded
-        if (!isCategoryExpanded) {
-            WhatsOnYourMindSection()
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // View All Button
+        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+            TextButton(
+                onClick = { isPrayerInfoExpanded = !isPrayerInfoExpanded },
+                colors = ButtonDefaults.textButtonColors(contentColor = PrimaryGreen)
+            ) {
+                Text(
+                    text = if (GlobalLanguage.isEnglish) {
+                        if (isPrayerInfoExpanded) "Hide Prayer Info" else "View All Prayer Info"
+                    } else {
+                        if (isPrayerInfoExpanded) "লুকান" else "অতিরিক্ত সালাতের সময় দেখুন"
+                    },
+                    fontWeight = FontWeight.Medium
+                )
+                Spacer(modifier=Modifier.width(4.dp))
+                Icon(
+                    imageVector = if (isPrayerInfoExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, 
+                    contentDescription = "Toggle"
+                )
+            }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Nafl Salat Section
-        NaflSalatSection(state)
+        if (isPrayerInfoExpanded) {
+            // Nafl Salat Section
+            NaflSalatSection(state)
 
-        Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-        // Forbidden Times
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp), 
-            horizontalArrangement = Arrangement.SpaceBetween, 
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(LocalAppStrings.current.forbidden_times, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextDark)
-            Icon(Icons.Outlined.Info, contentDescription = "Info", tint=TextGray, modifier=Modifier.size(18.dp))
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp), 
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            ForbiddenTimeCard(LocalAppStrings.current.sunrise, state.forbiddenSunrise, state.forbiddenSunriseEnd, Icons.Outlined.WbTwilight)
-            ForbiddenTimeCard(LocalAppStrings.current.noon, state.forbiddenNoon, state.forbiddenNoonEnd, Icons.Outlined.WbSunny)
-            ForbiddenTimeCard(LocalAppStrings.current.sunset, state.forbiddenSunset, state.forbiddenSunsetEnd, Icons.Outlined.WbTwilight)
+            // Forbidden Times
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp), 
+                horizontalArrangement = Arrangement.SpaceBetween, 
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(LocalAppStrings.current.forbidden_times, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = TextDark)
+                Icon(Icons.Outlined.Info, contentDescription = "Info", tint=TextGray, modifier=Modifier.size(18.dp))
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp), 
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                ForbiddenTimeCard(LocalAppStrings.current.sunrise, state.forbiddenSunrise, state.forbiddenSunriseEnd, Icons.Outlined.WbTwilight)
+                ForbiddenTimeCard(LocalAppStrings.current.noon, state.forbiddenNoon, state.forbiddenNoonEnd, Icons.Outlined.WbSunny)
+                ForbiddenTimeCard(LocalAppStrings.current.sunset, state.forbiddenSunset, state.forbiddenSunsetEnd, Icons.Outlined.WbTwilight)
+            }
+            
+            Spacer(modifier = Modifier.height(24.dp))
+        } else {
+            // "What's Your Mind" Section conditionally shown when hidden
+            WhatsOnYourMindSection(onNavigateToCreatePost = onNavigateToCreatePost)
         }
 
         Spacer(modifier = Modifier.height(40.dp))
@@ -1248,15 +1278,14 @@ fun PrayerRow(
 data class Quad<A, B, C, D>(val id: A, val name: B, val startTime: C, val endTime: D)
 
 @Composable
-fun CategoryGrid(
+fun CategoryScrollableRow(
     onNavigateToTracker: () -> Unit, 
     onNavigateToQuran: () -> Unit,
     onNavigateToZakat: () -> Unit,
     onNavigateToCalendar: () -> Unit,
     onNavigateToQibla: () -> Unit,
     onNavigateToAllahNames: () -> Unit = {},
-    onNavigateToRamadan: () -> Unit = {},
-    maxItems: Int? = null
+    onNavigateToRamadan: () -> Unit = {}
 ) {
     val items = if (GlobalLanguage.isEnglish) {
         listOf(
@@ -1290,71 +1319,58 @@ fun CategoryGrid(
         )
     }
 
-    val displayItems = if (maxItems != null) items.take(maxItems) else items
-
-    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-        val numRows = (displayItems.size + 3) / 4
-        for (row in 0 until numRows) {
-            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                for (col in 0..3) {
-                    val index = row * 4 + col
-                    if (index < displayItems.size) {
-                        val item = displayItems[index]
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(8.dp))
-                                .clickable {
-                                    if (item.first == "আমল শিক্ষা" || item.first == "তাসবিহ" || item.first == "নামাজ শিক্ষা" || 
-                                        item.first == "Amal Learning" || item.first == "Tasbih" || item.first == "Salah Learning") {
-                                        onNavigateToTracker()
-                                    } else if (item.first == "আল কুরআন" || item.first == "Al Quran") {
-                                        onNavigateToQuran()
-                                    } else if (item.first == "যাকাত" || item.first == "Zakat") {
-                                        onNavigateToZakat()
-                                    } else if (item.first == "ক্যালেন্ডার" || item.first == "Calendar") {
-                                        onNavigateToCalendar()
-                                    } else if (item.first == "কিবলা" || item.first == "Qibla") {
-                                        onNavigateToQibla()
-                                    } else if (item.first == "আল্লাহর নাম" || item.first == "Allah's Names") {
-                                        onNavigateToAllahNames()
-                                    } else if (item.first == "রমজান" || item.first == "Ramadan") {
-                                        onNavigateToRamadan()
-                                    }
-                                }
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(50.dp)
-                                    .background(
-                                        Color(
-                                            red = (item.third.red * 0.82f).coerceIn(0f, 1f),
-                                            green = (item.third.green * 0.82f).coerceIn(0f, 1f),
-                                            blue = (item.third.blue * 0.82f).coerceIn(0f, 1f),
-                                            alpha = 1f
-                                        ), 
-                                        CircleShape
-                                    ),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Icon(item.second, contentDescription = item.first, tint = Color.White, modifier = Modifier.size(24.dp))
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = item.first,
-                                color = TextDark,
-                                fontSize = 11.sp,
-                                textAlign = TextAlign.Center,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 2,
-                                lineHeight = 14.sp
-                            )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        items.forEach { item ->
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .width(72.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable {
+                        when (item.first) {
+                            "আমল শিক্ষা", "তাসবিহ", "নামাজ শিক্ষা", "Amal Learning", "Tasbih", "Salah Learning" -> onNavigateToTracker()
+                            "আল কুরআন", "Al Quran" -> onNavigateToQuran()
+                            "যাকাত", "Zakat" -> onNavigateToZakat()
+                            "ক্যালেন্ডার", "Calendar" -> onNavigateToCalendar()
+                            "কিবলা", "Qibla" -> onNavigateToQibla()
+                            "আল্লাহর নাম", "Allah's Names" -> onNavigateToAllahNames()
+                            "রমজান", "Ramadan" -> onNavigateToRamadan()
                         }
-                    } else {
-                        Spacer(modifier = Modifier.weight(1f))
                     }
+                    .padding(vertical = 8.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .background(
+                            Color(
+                                red = (item.third.red * 0.82f).coerceIn(0f, 1f),
+                                green = (item.third.green * 0.82f).coerceIn(0f, 1f),
+                                blue = (item.third.blue * 0.82f).coerceIn(0f, 1f),
+                                alpha = 1f
+                            ), 
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(item.second, contentDescription = item.first, tint = Color.White, modifier = Modifier.size(28.dp))
                 }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = item.first,
+                    color = TextDark,
+                    fontSize = 12.sp,
+                    textAlign = TextAlign.Center,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 2,
+                    lineHeight = 16.sp
+                )
             }
         }
     }
@@ -1549,6 +1565,119 @@ fun SocialBlockerOverlay(
                         fontWeight = FontWeight.Bold,
                         fontSize = 14.sp
                     )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CategoryGrid(
+    onNavigateToTracker: () -> Unit, 
+    onNavigateToQuran: () -> Unit,
+    onNavigateToZakat: () -> Unit,
+    onNavigateToCalendar: () -> Unit,
+    onNavigateToQibla: () -> Unit,
+    onNavigateToAllahNames: () -> Unit = {},
+    onNavigateToRamadan: () -> Unit = {},
+    maxItems: Int? = null
+) {
+    val items = if (GlobalLanguage.isEnglish) {
+        listOf(
+            Triple("Al Quran", Icons.Outlined.MenuBook, Color(0xFF10B981)),
+            Triple("Hadith", Icons.Outlined.LibraryBooks, Color(0xFF3B82F6)),
+            Triple("Tasbih", Icons.Outlined.Album, Color(0xFF8B5CF6)),
+            Triple("Qibla", Icons.Outlined.Explore, Color(0xFF10B981)),
+            Triple("Dua", Icons.Outlined.WavingHand, Color(0xFFEC4899)),
+            Triple("Allah's Names", Icons.Outlined.Star, Color(0xFFF59E0B)),
+            Triple("Zakat", Icons.Outlined.MonetizationOn, Color(0xFF10B981)),
+            Triple("Calendar", Icons.Outlined.CalendarMonth, Color(0xFF6366F1)),
+            Triple("Amal Learning", Icons.Outlined.School, Color(0xFF8B5CF6)),
+            Triple("Ramadan", Icons.Outlined.ModeNight, Color(0xFF6366F1)),
+            Triple("Islamic Name", Icons.Outlined.People, Color(0xFF3B82F6)),
+            Triple("Salah Learning", Icons.Outlined.SelfImprovement, Color(0xFF14B8A6))
+        )
+    } else {
+        listOf(
+            Triple("আল কুরআন", Icons.Outlined.MenuBook, Color(0xFF10B981)),
+            Triple("হাদিস", Icons.Outlined.LibraryBooks, Color(0xFF3B82F6)),
+            Triple("তাসবিহ", Icons.Outlined.Album, Color(0xFF8B5CF6)),
+            Triple("কিবলা", Icons.Outlined.Explore, Color(0xFF10B981)),
+            Triple("দোয়া", Icons.Outlined.WavingHand, Color(0xFFEC4899)),
+            Triple("আল্লাহর নাম", Icons.Outlined.Star, Color(0xFFF59E0B)),
+            Triple("যাকাত", Icons.Outlined.MonetizationOn, Color(0xFF10B981)),
+            Triple("ক্যালেন্ডার", Icons.Outlined.CalendarMonth, Color(0xFF6366F1)),
+            Triple("আমল শিক্ষা", Icons.Outlined.School, Color(0xFF8B5CF6)),
+            Triple("রমজান", Icons.Outlined.ModeNight, Color(0xFF6366F1)),
+            Triple("ইসলামিক নাম", Icons.Outlined.People, Color(0xFF3B82F6)),
+            Triple("নামাজ শিক্ষা", Icons.Outlined.SelfImprovement, Color(0xFF14B8A6))
+        )
+    }
+
+    val displayItems = if (maxItems != null) items.take(maxItems) else items
+
+    Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+        val numRows = (displayItems.size + 3) / 4
+        for (row in 0 until numRows) {
+            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                for (col in 0..3) {
+                    val index = row * 4 + col
+                    if (index < displayItems.size) {
+                        val item = displayItems[index]
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable {
+                                    if (item.first == "আমল শিক্ষা" || item.first == "তাসবিহ" || item.first == "নামাজ শিক্ষা" || 
+                                        item.first == "Amal Learning" || item.first == "Tasbih" || item.first == "Salah Learning") {
+                                        onNavigateToTracker()
+                                    } else if (item.first == "আল কুরআন" || item.first == "Al Quran") {
+                                        onNavigateToQuran()
+                                    } else if (item.first == "যাকাত" || item.first == "Zakat") {
+                                        onNavigateToZakat()
+                                    } else if (item.first == "ক্যালেন্ডার" || item.first == "Calendar") {
+                                        onNavigateToCalendar()
+                                    } else if (item.first == "কিবলা" || item.first == "Qibla") {
+                                        onNavigateToQibla()
+                                    } else if (item.first == "আল্লাহর নাম" || item.first == "Allah's Names") {
+                                        onNavigateToAllahNames()
+                                    } else if (item.first == "রমজান" || item.first == "Ramadan") {
+                                        onNavigateToRamadan()
+                                    }
+                                }
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(50.dp)
+                                    .background(
+                                        Color(
+                                            red = (item.third.red * 0.82f).coerceIn(0f, 1f),
+                                            green = (item.third.green * 0.82f).coerceIn(0f, 1f),
+                                            blue = (item.third.blue * 0.82f).coerceIn(0f, 1f),
+                                            alpha = 1f
+                                        ), 
+                                        CircleShape
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(item.second, contentDescription = item.first, tint = Color.White, modifier = Modifier.size(24.dp))
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = item.first,
+                                color = TextDark,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Center,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 2,
+                                lineHeight = 14.sp
+                            )
+                        }
+                    } else {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
                 }
             }
         }
