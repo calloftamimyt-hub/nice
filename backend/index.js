@@ -33,6 +33,57 @@ app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', message: 'Backend server is running properly with R2!' });
 });
 
+// Proxy logic to keep Supabase API key hidden
+const REAL_SUPABASE_URL = process.env.SUPABASE_URL; // e.g., https://your-project.supabase.co
+const REAL_SUPABASE_KEY = process.env.SUPABASE_KEY;
+
+app.use(['/auth/v1/*', '/rest/v1/*'], async (req, res) => {
+    try {
+        if (!REAL_SUPABASE_URL || !REAL_SUPABASE_KEY) {
+            return res.status(500).json({ error: 'Supabase URL or Key not set on the server.' });
+        }
+
+        const targetUrl = new URL(req.originalUrl, REAL_SUPABASE_URL).toString();
+        
+        const headers = new Headers();
+        // Copy relevant headers from the client
+        if (req.headers.authorization) {
+            headers.append('Authorization', req.headers.authorization);
+        } else {
+            headers.append('Authorization', `Bearer ${REAL_SUPABASE_KEY}`);
+        }
+        
+        headers.append('apikey', REAL_SUPABASE_KEY);
+        
+        if (req.headers['content-type']) headers.append('Content-Type', req.headers['content-type']);
+        if (req.headers.accept) headers.append('Accept', req.headers.accept);
+
+        const fetchOptions = {
+            method: req.method,
+            headers: headers,
+        };
+
+        if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
+            fetchOptions.body = JSON.stringify(req.body);
+        }
+
+        const response = await fetch(targetUrl, fetchOptions);
+        
+        const contentType = response.headers.get('content-type');
+        let data;
+        if (contentType && contentType.includes('application/json')) {
+            data = await response.json();
+            res.status(response.status).json(data);
+        } else {
+            data = await response.text();
+            res.status(response.status).send(data);
+        }
+    } catch (error) {
+        console.error('Proxy Error:', error);
+        res.status(500).json({ error: 'Failed proxy request.' });
+    }
+});
+
 // Media Upload Endpoint (Video/Photo)
 app.post('/api/upload', upload.single('media'), async (req, res) => {
     if (!req.file) {
