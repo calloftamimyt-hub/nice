@@ -37,13 +37,15 @@ app.get('/api/health', (req, res) => {
 const REAL_SUPABASE_URL = process.env.SUPABASE_URL; // e.g., https://your-project.supabase.co
 const REAL_SUPABASE_KEY = process.env.SUPABASE_KEY;
 
-app.use(['/auth/v1/*', '/rest/v1/*'], async (req, res) => {
+app.use(['/auth/v1', '/rest/v1'], async (req, res) => {
     try {
         if (!REAL_SUPABASE_URL || !REAL_SUPABASE_KEY) {
             return res.status(500).json({ error: 'Supabase URL or Key not set on the server.' });
         }
 
-        const targetUrl = new URL(req.originalUrl, REAL_SUPABASE_URL).toString();
+        // Fix double trailing slashes just in case, originalUrl contains /auth/v1/...
+        const baseUrl = REAL_SUPABASE_URL.endsWith('/') ? REAL_SUPABASE_URL.slice(0, -1) : REAL_SUPABASE_URL;
+        const targetUrl = new URL(req.originalUrl, baseUrl).toString();
         
         const headers = new Headers();
         // Copy relevant headers from the client
@@ -54,7 +56,8 @@ app.use(['/auth/v1/*', '/rest/v1/*'], async (req, res) => {
         }
         
         headers.append('apikey', REAL_SUPABASE_KEY);
-        
+        // Ensure X-Client-Info matches
+        if (req.headers['x-client-info']) headers.append('X-Client-Info', req.headers['x-client-info']);
         if (req.headers['content-type']) headers.append('Content-Type', req.headers['content-type']);
         if (req.headers.accept) headers.append('Accept', req.headers.accept);
 
@@ -64,7 +67,12 @@ app.use(['/auth/v1/*', '/rest/v1/*'], async (req, res) => {
         };
 
         if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
-            fetchOptions.body = JSON.stringify(req.body);
+            // Forward body if present
+            if (req.headers['content-type'] && req.headers['content-type'].includes('application/json')) {
+                fetchOptions.body = JSON.stringify(req.body);
+            } else if (Object.keys(req.body || {}).length > 0) {
+                 fetchOptions.body = JSON.stringify(req.body);
+            }
         }
 
         const response = await fetch(targetUrl, fetchOptions);
@@ -73,14 +81,14 @@ app.use(['/auth/v1/*', '/rest/v1/*'], async (req, res) => {
         let data;
         if (contentType && contentType.includes('application/json')) {
             data = await response.json();
-            res.status(response.status).json(data);
+            return res.status(response.status).json(data);
         } else {
             data = await response.text();
-            res.status(response.status).send(data);
+            return res.status(response.status).send(data);
         }
     } catch (error) {
         console.error('Proxy Error:', error);
-        res.status(500).json({ error: 'Failed proxy request.' });
+        return res.status(500).json({ error: 'Failed proxy request.', details: error.message });
     }
 });
 
